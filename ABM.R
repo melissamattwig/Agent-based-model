@@ -178,20 +178,23 @@ extracellular <- function(x){
 
 
 ## Initial agents and time step parameters
-num_agents <- 30
-num_time_steps <- 200
+num_agents <- 100
+num_time_steps <- 800
 
+
+##### start quota at twice qnaught
 ## Set up data frame for agents
 agents <- data.frame("ID" = 1:num_agents, "vmax" = 0.0000014, "km" = 17, 
                      "mumax" = 1.1, "qnaught" = 0.00000036, "cell_size" = 0.00075, 
                      "alive" = 1)
 ## Set up data frame for state variables
-state <- data.frame("S" = 1400)
+state <- data.frame("S" = 1.4)
+## try with 14 for inflow and starting concentration
 agents <- cbind(agents, state)
 #set seed here
 #state$flow_rate <- runif(1, min = 0.16, max = 0.86)
 state$flow_rate <- 0.86
-state$nutrient_inflow <- 1400
+state$nutrient_inflow <- 1.4
 ## Set up other parameter values
 q <- rep(0, num_agents)
 size <- rep(0, num_agents)
@@ -199,21 +202,33 @@ m0 <- 0.00075
 output <- data.frame()
 agents_time <- data.frame()
 
+### set up dataframes to keep track of times
+mortality_time <- data.frame()
+functions_time <- data.frame()
+division_time <- data.frame()
+
 startTime <- Sys.time()
+## make data frame for time it takes to do each time step
 for (i in 1:num_time_steps) {
   ## mortality (**use dilution rate, in Hellweger paper is 0.5 per day for Droop paper)
+  mortality_start <- Sys.time()
   for (k in agents$ID){
-    random = runif(1, min = 1, max = 100)
-    if (random <= 30){
+    random <- runif(1, min = 1, max = 100)
+    if (random < 2.0){
       agents[k,7] = 0
     }
   }
+  mortality_end <- Sys.time()
+ # for (k in agents$ID){
+    
+ # }
   ## filter out dead agents
   agents_alive <- filter(agents, alive == 1)
   ## update S from state data frame
   agents_alive$S <- state$S
   q <- q[1:nrow(agents_alive)]
   ## sum uptake per time step to use for extracellular concentration
+  functions_start <- Sys.time()
   quota_per_agent <- apply(agents_alive[, c(2, 3, 8)], MARGIN = 1, FUN = function(x) uptake(x))
   quota_per_time <- sum(quota_per_agent)
   q <- q + apply(agents_alive[, c(2, 3, 8)], MARGIN = 1, FUN = function(x) uptake(x))
@@ -223,11 +238,17 @@ for (i in 1:num_time_steps) {
   tmp <- cbind(tmp, mu)
   size <- size[1:nrow(agents_alive)]
   size <- size + apply(tmp[, c(6, 10)], MARGIN = 1, FUN = function(x) division(x))
+  functions_end <- Sys.time()
   ## if size calculated by division function is below minimum cell size (0.75), 
   ## replace with minimum cell size
   size <- ifelse(size < 0.00075, 0.00075, size)
   index = 1
   ## division by cell size
+  
+  ####
+  #TIME HOG
+  ####
+  division_start <- Sys.time()
   for (j in size){
     if (j > (2*tmp[index,6])){
       size[index] = m0
@@ -241,11 +262,17 @@ for (i in 1:num_time_steps) {
       mu <- append(mu, mu[index])
       size <- append(size, size[index])
       index = index + 1
-      ## divide quota equally between old and new cell
+      ## write a function that can be applied row wise
+      ## try putting bind further up
     }
+    index = index + 1
   }
+  division_end <- Sys.time()
   ## update extracellular nutrient concentration state variable
   state$quota_per_time <- quota_per_time
+  
+  ############## ONLY QUOTA UPTAKE FROM TIME STEP SHOULD BE SUBTRACTED
+  ## extracellular function should be sum of uptake rate across all individuals 
   new_S <- state$S + apply(state, MARGIN = 1, FUN = function(x) extracellular(x))
   state <- replace(state, 1, new_S)
   if (state$S < 0){
@@ -269,6 +296,15 @@ for (i in 1:num_time_steps) {
   agents_per_time <- data.frame("time" = i, "number_agents" = agent_num_per_time)
   agents_time<- rbind(agents_time, agents_per_time)
   
+  mortality_per_time <- data.frame('time' = i, "start" = mortality_start, "end" = mortality_end)
+  mortality_time <- rbind(mortality_time, mortality_per_time)
+  
+  functions_per_time <- data.frame('time' = i, "start" = functions_start, "end" = functions_end)
+  functions_time <- rbind(functions_time, functions_per_time)
+  
+  division_per_time <- data.frame('time' = i, "start" = division_start, "end" = division_end)
+  division_time <- rbind(division_time, division_per_time)
+  
   #row-append to output dataframe that stores outputs for all agents and all time steps
   output <- rbind(output, out_per_time)
 }
@@ -280,4 +316,5 @@ ggplot(one, aes(x = time, y = q)) + geom_point()
 ggplot(output, aes(x = time, y = mu)) + geom_point() + xlim(0, 45) + ylim(0, 1.15)
 ggplot(output, aes(x = time, y = q)) + geom_point()
 ggplot(agents_time, aes(x = time, y = number_agents)) + geom_point()
-write.csv(output,"C:\\Users\\Matt\\Desktop\\Thesis\\output2.csv", row.names = FALSE)
+write.csv(output,"C:\\Users\\Matt\\Desktop\\Thesis\\output0.14.csv", row.names = FALSE)
+read.csv("C:\\Users\\Matt\\Desktop\\Thesis\\output0.14.csv")
