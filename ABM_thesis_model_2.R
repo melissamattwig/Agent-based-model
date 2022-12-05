@@ -63,6 +63,37 @@ intermediate_intracellular<- data.frame() ##CMG TRIED ADDING THIS
 intermediate_intracellular_concentration <- data.frame()
 foo_time <- data.frame()
 
+
+##########################################
+## functions created for model
+##########################################
+
+numColonies <- function(individuals){
+  num_colonies <- length(unique(individuals[, 8]))
+  iterator = 1
+  colony_id <- c()
+  colony_population <- c()
+  for (i in 1:num_colonies){
+    while ((iterator %in% individuals[, 8]) == FALSE){
+      iterator <- iterator + 1
+    }
+    if ((iterator %in% individuals[, 8]) == TRUE){
+      count = length(individuals[, 8][individuals[,8 ] == iterator])
+      colony_population <- append(colony_population, count)
+      colony_id <- append(colony_id, iterator)
+      iterator <- iterator + 1
+    }
+    else{
+      print("there is some other issue you need to figure out")
+    }
+  }
+  colony_numbers <- data.frame(colony_id, colony_population)
+  #rownames(colony_numbers) <- colony_names
+  colnames(colony_numbers) <- c("colony_id", "colony_population")
+  return(colony_numbers)
+}
+
+
 ##########################################
 ## for loop for model run
 ##########################################
