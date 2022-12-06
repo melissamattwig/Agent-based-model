@@ -4,14 +4,14 @@
 ## Initial individuals and time step parameters
 ##########################################
 
-num_individuals <- 1500
+num_individuals <- 45000
 Sr = 6666 ## number of individuals a individuals represents
-num_time_steps <- 600
+num_time_steps <- 100
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
-individual_matrix_size <- 10000
-colony_matrix_size <- 10000
+individual_matrix_size <- 100000
+colony_matrix_size <- 1000
 
 ## Set up data frame for state variables
 state <- data.frame("S" = 500)
@@ -30,7 +30,7 @@ individuals[1:num_individuals, 4] <- state$S ## S
 individuals[1:num_individuals, 5] <- 0.00000079 ## internal resource concentration (nmol/cell)
 individuals[1:individual_matrix_size, 6] <- 0.04166667 ## mumax (1/hour)
 individuals[1:individual_matrix_size, 7] <- 0.002333 ## qnaught (nmol/nmol C)
-individuals[1:individual_matrix_size, 8] <- sample(1:15, individual_matrix_size, replace = TRUE, prob = c(2,rep(1,14)))
+individuals[1:individual_matrix_size, 8] <- sample(1:30, individual_matrix_size, replace = TRUE, prob = c(1.5, 0.75, rep(1,28)))
   
 ## make another matrix for colony information
 ## convection and death on colony level, then remove those individuals from individuals matrix
@@ -47,7 +47,7 @@ individuals[1:individual_matrix_size, 8] <- sample(1:15, individual_matrix_size,
 ## Set up matrix for colony
 ##########################################
 
-colony <- matrix(NA, nrow = colony_matrix_size, ncol = 3)
+colony <- data.frame()
 
 #############################################
 ## Set up diagnostic and plotting data frames
@@ -73,6 +73,7 @@ numColonies <- function(individuals){
   iterator = 1
   colony_id <- c()
   colony_population <- c()
+  colony_live <- c()
   for (i in 1:num_colonies){
     while ((iterator %in% individuals[, 8]) == FALSE){
       iterator <- iterator + 1
@@ -81,15 +82,16 @@ numColonies <- function(individuals){
       count = length(individuals[, 8][individuals[,8 ] == iterator])
       colony_population <- append(colony_population, count)
       colony_id <- append(colony_id, iterator)
+      colony_live <- append(colony_live, 1)
       iterator <- iterator + 1
     }
     else{
       print("there is some other issue you need to figure out")
     }
   }
-  colony_numbers <- data.frame(colony_id, colony_population)
+  colony_numbers <- data.frame(colony_id, colony_population, colony_live)
   #rownames(colony_numbers) <- colony_names
-  colnames(colony_numbers) <- c("colony_id", "colony_population")
+  colnames(colony_numbers) <- c("colony_id", "colony_population", "alive")
   return(colony_numbers)
 }
 
@@ -100,11 +102,12 @@ numColonies <- function(individuals){
 
 #profvis({
 for (i in 1:num_time_steps) {
-  which(!is.na(individuals[,3]) & individuals[,3] == 1) |> length() -> individuals_before_death
-  intracellular_before_death <- sum(individuals[1:num_individuals, 5])
-  ## agent death
-  random <- runif(num_individuals, 0, 100)
-  individuals[seq_len(num_individuals),][random <= 100*(0.5/24), 3] <- 0 #CMG CHANGED
+  colony <- numColonies(individuals)
+  num_colonies <- nrow(colony)
+  
+  ## colony death/dilution
+  random <- runif(num_colonies, 0, 100)
+  colony[seq_len(num_colonies),][random <= 100*(0.5/24), 3] <- 0 #CMG CHANGED
   
   random[which(random<100*(0.5/24))]<-0
   random[which(random>=100*(0.5/24))]<-1
