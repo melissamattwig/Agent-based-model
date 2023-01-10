@@ -5,7 +5,7 @@
 ##########################################
 
 num_individuals <- 45000
-Sr = 6666 ## number of individuals a individuals represents
+#Sr = 6666 ## number of individuals a individuals represents
 num_time_steps <- 100
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
@@ -30,7 +30,8 @@ individuals[1:num_individuals, 4] <- state$S ## S
 individuals[1:num_individuals, 5] <- 0.00000079 ## internal resource concentration (nmol/cell)
 individuals[1:individual_matrix_size, 6] <- 0.04166667 ## mumax (1/hour)
 individuals[1:individual_matrix_size, 7] <- 0.002333 ## qnaught (nmol/nmol C)
-individuals[1:individual_matrix_size, 8] <- sample(1:30, individual_matrix_size, replace = TRUE, prob = c(1.5, 0.75, rep(1,28)))
+individuals[1:individual_matrix_size, 8] <- sample(1:30, individual_matrix_size, replace = TRUE, 
+                                                   prob = c(1.5, 0.75, rep(1,28))) ## colony id
   
 ## make another matrix for colony information
 ## convection and death on colony level, then remove those individuals from individuals matrix
@@ -109,10 +110,13 @@ for (i in 1:num_time_steps) {
   random <- runif(num_colonies, 0, 100)
   colony[seq_len(num_colonies),][random <= 100*(0.5/24), 3] <- 0 #CMG CHANGED
   
-  random[which(random<100*(0.5/24))]<-0
-  random[which(random>=100*(0.5/24))]<-1
-  individuals[1:num_individuals,3] <- random
-  
+  ## remove individuals from colonies that washed out & update S
+  washed_out_colonies <- which(colony[, 3] == 0)
+  for (i in 1:num_individuals){
+    if ((individuals[i, 8] %in% washed_out_colonies) == TRUE){
+      individuals[i, 3] = 0
+    }
+  }
   
   ## filter by live individuals 
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
