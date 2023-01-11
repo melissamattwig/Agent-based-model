@@ -150,8 +150,6 @@ for (i in 1:num_time_steps) {
   }
   ######################################################
   
-  #intracellular_after_uptake_before_division <- sum(individuals[live_individuals, 5],na.rm=TRUE)
-  
   ### 3. GROWTH ########################################
   ## calculate mu (growth rate), convert intracellular resource to quota (nmol/nmol C)
   mu <- individuals[live_individuals, 6]*(1-(individuals[live_individuals, 7]/
