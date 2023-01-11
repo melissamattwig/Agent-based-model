@@ -58,12 +58,7 @@ output <- replicate(num_time_steps, NA, simplify = FALSE)
 resource_time <- data.frame()
 intracellular_time <- data.frame()
 uptake_time <- data.frame()
-uptake_per_individual <- data.frame()
 Sr_time <- data.frame()
-intermediate_intracellular<- data.frame() ##CMG TRIED ADDING THIS
-intermediate_intracellular_concentration <- data.frame()
-foo_time <- data.frame()
-
 
 ##########################################
 ## functions created for model
@@ -75,6 +70,7 @@ numColonies <- function(individuals){
   colony_id <- c()
   colony_population <- c()
   colony_live <- c()
+  colony_sr <- c()
   for (i in 1:num_colonies){
     while ((iterator %in% individuals[, 8]) == FALSE){
       iterator <- iterator + 1
@@ -84,15 +80,16 @@ numColonies <- function(individuals){
       colony_population <- append(colony_population, count)
       colony_id <- append(colony_id, iterator)
       colony_live <- append(colony_live, 1)
+      colony_sr <- append(colony_sr, 400)
       iterator <- iterator + 1
     }
     else{
       print("there is some other issue you need to figure out")
     }
   }
-  colony_numbers <- data.frame(colony_id, colony_population, colony_live)
+  colony_numbers <- data.frame(colony_id, colony_population, colony_live, colony_sr)
   #rownames(colony_numbers) <- colony_names
-  colnames(colony_numbers) <- c("colony_id", "colony_population", "alive")
+  colnames(colony_numbers) <- c("colony_superindividual_id", "colony_population", "alive", "Sr")
   return(colony_numbers)
 }
 
@@ -103,14 +100,16 @@ numColonies <- function(individuals){
 
 #profvis({
 for (i in 1:num_time_steps) {
-  colony <- numColonies(individuals)
-  num_colonies <- nrow(colony)
+  ## switched this to if statement so Sr isn't reset every timestep
+  if (i == 1){
+    colony <- numColonies(individuals)
+    num_colonies <- nrow(colony)}
   
-  ## colony death/dilution
+  ### 1. DILTUION (of colonies & S) ########################
   random <- runif(num_colonies, 0, 100)
   colony[seq_len(num_colonies),][random <= 100*(0.5/24), 3] <- 0 #CMG CHANGED
   
-  ## remove individuals from colonies that washed out & update S
+  ## remove individuals from colonies that washed out
   washed_out_colonies <- which(colony[, 3] == 0)
   for (i in 1:num_individuals){
     if ((individuals[i, 8] %in% washed_out_colonies) == TRUE){
@@ -118,50 +117,54 @@ for (i in 1:num_time_steps) {
     }
   }
   
+  ## remove washed out colonies from dataframe
+  colony = colony[colony$alive == 1, ]
+  
+  ## update S by dilution
+  state$S <- state$S - (state$flow_rate*state$S)
+  ######################################################
+  
+  ### 2. UPTAKE ########################################
   ## filter by live individuals 
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
-  individuals_after_death <- length(live_individuals)
-  intracellular_after_death <- sum(individuals[live_individuals, 5])
-  #individuals_alive <- individuals[!is.na(individuals[,3]) & individuals[,3] == 1,]
   
-  ## determine uptake for live individuals
+  ## NOTE: this can be changed when vmax, or km are variable between individuals/colonies
   uptake_per_individual <- vmax*(state$S /(km + state$S))
-  foo <- (state$S/(km + state$S))
+  
   ## multiply uptake per individual by each individual's cell size
-  resource_uptake_per_individualt <- uptake_per_individual*individuals[live_individuals, 2]
-  #resource_uptake_all_ind <- resource_uptake_per_agent*Sr  ### DONT NEED THIS FOR INDIVIDUALS
+  resource_uptake_per_individual <- uptake_per_individual*individuals[live_individuals, 2]
+
   ## sum uptake per individual for extracellular mass balance
   uptake_total <- sum(resource_uptake_per_individual)
   
   ## incorporate uptake into individuals
   if (state$S < uptake_total){
-    uptake_S <- (state$S/(length(live_individuals)*Sr))
+    uptake_S <- (state$S/(length(live_individuals)))
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + uptake_S
-    uptake_total = uptake_S
+    uptake_total = uptake_S ## not sure why this is here
     state$S = 0 
   }
   else{
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + resource_uptake_per_agent
     state$S = state$S - uptake_total
   }
-  ## update S by dilution
-  state$S <- state$S - (state$flow_rate*state$S)
+  ######################################################
   
-  intracellular_after_uptake_before_division <- sum(individuals[live_individuals, 5],na.rm=TRUE)
+  #intracellular_after_uptake_before_division <- sum(individuals[live_individuals, 5],na.rm=TRUE)
   
+  ### 3. GROWTH ########################################
   ## calculate mu (growth rate), convert intracellular resource to quota (nmol/nmol C)
   mu <- individuals[live_individuals, 6]*(1-(individuals[live_individuals, 7]/
                                      (individuals[live_individuals, 5]/individuals[live_individuals, 2])))
   ## update individual cell size of all individuals
   individuals[live_individuals, 2] <- individuals[live_individuals, 2] + (mu*individuals[live_individuals, 2])
-  ## if size calculated by division function is below minimum cell size (0.75), 
-  ## replace with minimum cell size
+  ## if size calculated by division is below minimum cell size (m0), replace with m0
   if (any(!is.na(individuals[, 2]) & individuals[, 2] < 0.00022)) { 
     warning("size too small")
   }
+  ######################################################
   
-  ## division by cell size
-  
+  ### 4. DIVISION ######################################
   last_ID <- tail(live_individuals, n = 1)
   for (j in live_individuals){
     if (individuals[j, 2] > (2*m0)){
@@ -176,16 +179,23 @@ for (i in 1:num_time_steps) {
       last_ID <- last_ID + 1
     }
   }
+  ## sloughing ???????????
+  
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
-  individuals_after_division <- length(individuals[live_individuals])
+  #individuals_after_division <- length(individuals[live_individuals])
+  ######################################################
   
-  ##update S with new inflow nutrients
+  ### 5. MERGING/SEPARATING ############################
+  ######################################################
+  
+  ### 6. UPDATE S W/ NEW RESOURCE ######################
   state$S <- state$S + (state$flow_rate*state$nutrient_inflow) 
-  
   
   ## update S in individuals matrix
   individuals[, 4] <- state$S
-  #individuals_alive <- individuals[!is.na(individuals[,3]) & individuals[,3] == 1,]
+  ######################################################
+  
+  ### 7. OUTPUT DATAFRAME FOR ALL TIMESTEPS ############
   out_per_time <- data.frame("ID" = individuals[live_individuals, 1], 
                              "vmax" = vmax, 
                              "km" = km,
@@ -198,8 +208,7 @@ for (i in 1:num_time_steps) {
                              "cell_size" = individuals[live_individuals, 2],
                              "alive" = individuals[live_individuals, 3])
 
-  ## filter by live individuals again after division
-  live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
+  ## recreate individuals matrix for new timestep ### GET RID OF THIS????
   intracellular_resource <- individuals[live_individuals, 5]
   cell_size <- individuals[live_individuals, 2]
   individuals <- matrix(NA, nrow = matrix_size, ncol = 7)
@@ -215,27 +224,23 @@ for (i in 1:num_time_steps) {
   ## creating timestep data frames for diagnostics and plotting
   resource_per_time <- data.frame("time" = i, "concentration" = state$S)
   intracellular_per_timestep <- data.frame("time" = i, "intracellular_after_uptake_before_division" = intracellular_after_uptake_before_division)
-  intermediate_intracellular <- data.frame("time" = i, "intracellular_before_death" = intracellular_before_death, 
-                                           "intracellular_after_death" = intracellular_after_death)
   uptake_per_timestep <- data.frame("time" = i, "uptake_size" = uptake_total)
-  uptake_per_individual_timestep <- data.frame("time" = i, "uptake_per_agent" = uptake_per_agent[1])
-  Sr_per_timestep <- data.frame("time" = i, "Sr" = Sr, "num_individuals" = num_individuals,
-                                "individuals_before_death" = individuals_before_death, "individuals_after_death" = individuals_after_death,
-                                "individuals_after_division" = individuals_after_division)
-  foo_timestep <- data.frame("time" = i, "S" = state$S, "foo" = foo)
   
   uptake_time <- rbind(uptake_time, uptake_per_timestep)
   resource_time <- rbind(resource_time, resource_per_time)
   intracellular_time <- rbind(intracellular_time, intracellular_per_timestep)
-  uptake_per_individual <- rbind(uptake_per_individual, uptake_per_individual_timestep)
-  Sr_time <- rbind(Sr_time, Sr_per_timestep)
-  intermediate_intracellular_concentration <- rbind(intermediate_intracellular_concentration, intermediate_intracellular)
-  foo_time <- rbind(foo_time, foo_timestep)
   
   #row-append to output dataframe that stores outputs for all individuals and all time steps
   output[[i]] <- out_per_time
+  ######################################################
 }
 #})
+
+##########################################
+## Plotting
+##########################################
+library(ggplot2)
+library(dplyr)
 
 output_df <- data.frame()
 
@@ -247,8 +252,6 @@ for (i in 1:num_time_steps){
 intracellular_time <- cbind(intracellular_time, resource_time[,2, drop=FALSE])
 intracellular_time$mass_balance <- (intracellular_time$intracellular_after_uptake_before_division+intracellular_time$concentration)
 
-library(ggplot2)
-library(dplyr)
 
 ggplot(Sr_time, aes(x = time, y = (num_individuals))) + geom_point() ##USEFUL
 ggplot(Sr_time, aes(x = time, y = (num_individuals*Sr))) + geom_point() ##USEFUL
