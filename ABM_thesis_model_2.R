@@ -108,19 +108,11 @@ for (i in 1:num_time_steps) {
     num_colonies <- nrow(colony)}
   
   ### 1. DILTUION (of colonies & S) ########################
-  random <- runif(num_colonies, 0, 100)
-  colony[seq_len(num_colonies),][random <= 100*(0.5/24), 3] <- 0 #CMG CHANGED
-  
-  ## remove individuals from colonies that washed out
-  washed_out_colonies <- which(colony[, 3] == 0)
-  for (i in 1:num_individuals){
-    if ((individuals[i, 8] %in% washed_out_colonies) == TRUE){
-      individuals[i, 3] = 0
-    }
+  for (i in 1:num_colonies){
+    random <- runif(colony[i, 4], 0, 100)
+    num_to_remove <- length(which(random <= 100*(0.5/24)))
+    colony[i, 4] <- (colony[i, 4] - num_to_remove)
   }
-  
-  ## remove washed out colonies from dataframe
-  colony = colony[colony$alive == 1, ]
   
   ## get TOTAL individuals (individuals per colony times Sr)
   colony$total_individuals_Sr <- colony$colony_population*colony$Sr
