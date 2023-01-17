@@ -22,7 +22,7 @@ state$nutrient_inflow <- 500
 ## Set up colony for individuals 
 ##########################################
 
-individuals <- matrix(NA, nrow = individual_matrix_size, ncol = 8)
+individuals <- matrix(NA, nrow = individual_matrix_size, ncol = 11)
 individuals[1:num_individuals, 1] <- 1:num_individuals  #ID
 individuals[1:num_individuals, 2] <- 0.00033  ## cell size
 individuals[1:num_individuals, 3] <- 1 ## alive
@@ -32,6 +32,9 @@ individuals[1:individual_matrix_size, 6] <- 0.04166667 ## mumax (1/hour)
 individuals[1:individual_matrix_size, 7] <- 0.002333 ## qnaught (nmol/nmol C)
 individuals[1:individual_matrix_size, 8] <- sample(1:30, individual_matrix_size, replace = TRUE, 
                                                    prob = c(1.5, 0.75, rep(1,28))) ## colony id
+individuals[1:individual_matrix_size, 9] <- 0 ## uptake (per individual, 0 to start)
+individuals[1:individual_matrix_size, 10] <- 0.097083333 ## Vmax (nmol/nmol C*hour) 
+individuals[1:individual_matrix_size, 11] <- 510 ## Km (nmol/L)
   
 ## make another matrix for colony information
 ## convection and death on colony level, then remove those individuals from individuals matrix
@@ -80,7 +83,7 @@ numColonies <- function(individuals){
       colony_population <- append(colony_population, count)
       colony_id <- append(colony_id, iterator)
       colony_live <- append(colony_live, 1)
-      colony_sr <- append(colony_sr, 400)
+      colony_sr <- append(colony_sr, 20)
       iterator <- iterator + 1
     }
     else{
@@ -92,7 +95,6 @@ numColonies <- function(individuals){
   colnames(colony_numbers) <- c("colony_superindividual_id", "colony_population", "alive", "Sr")
   return(colony_numbers)
 }
-
 
 ##########################################
 ## for loop for model run
@@ -120,6 +122,9 @@ for (i in 1:num_time_steps) {
   ## remove washed out colonies from dataframe
   colony = colony[colony$alive == 1, ]
   
+  ## get TOTAL individuals (individuals per colony times Sr)
+  colony$total_individuals_Sr <- colony$colony_population*colony$Sr
+  
   ## update S by dilution
   state$S <- state$S - (state$flow_rate*state$S)
   ######################################################
@@ -128,20 +133,29 @@ for (i in 1:num_time_steps) {
   ## filter by live individuals 
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
   
-  ## NOTE: this can be changed when vmax, or km are variable between individuals/colonies
-  uptake_per_individual <- vmax*(state$S /(km + state$S))
+  ## NOTE: line 135 allows for variation in Vmax and Km PER INDIVIDUAL
+  uptake_per_individual <- vmax*(state$S /(km + state$S)) ## kept this to check that next line works
+  individuals[live_individuals, 9] <- individuals[live_individuals, 10]*(state$S /(individuals[live_individuals, 11] + state$S))
   
   ## multiply uptake per individual by each individual's cell size
-  resource_uptake_per_individual <- uptake_per_individual*individuals[live_individuals, 2]
-
+  resource_uptake_per_individual <- uptake_per_individual*individuals[live_individuals, 2] ## keep this for incorporating S into individuals!!
+  individuals[live_individuals, 9] <- individuals[live_individuals, 9]*individuals[live_individuals, 2]
+  
+  ## aggregate uptake per individual to colony level, multiply Sr by uptake per colony to get uptake
+  ## per superindividual
+  uptake_per_colony <- aggregate(individuals[live_individuals, 7]~individuals[live_individuals, 8], individuals, sum)
+  colony <- cbind(colony, uptake_per_colony[, 2])
+  colnames(colony) <- c("colony_superindividual_id", "colony_population", "alive", "Sr", "uptake_per_superindividal")
+  colony$uptake_per_superindividal <- (colony$uptake_per_superindividal*colony$Sr)
+  
   ## sum uptake per individual for extracellular mass balance
-  uptake_total <- sum(resource_uptake_per_individual)
+  uptake_total <- sum(colony$uptake_per_superindividal)
   
   ## incorporate uptake into individuals
   if (state$S < uptake_total){
-    uptake_S <- (state$S/(length(live_individuals)))
+    uptake_S <- (state$S/(sum(colony$total_individuals_Sr)))
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + uptake_S
-    uptake_total = uptake_S ## not sure why this is here
+    uptake_total = uptake_S ## change uptake total to keep track of actual total when desired total exceeds S
     state$S = 0 
   }
   else{
