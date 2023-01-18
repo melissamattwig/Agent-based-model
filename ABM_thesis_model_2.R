@@ -4,7 +4,8 @@
 ## Initial individuals and time step parameters
 ##########################################
 
-num_individuals <- 45000
+num_individuals <- 5000
+max_colony_size <- 50000
 #Sr = 6666 ## number of individuals a individuals represents
 num_time_steps <- 100
 vmax <- 0.097083333 #(nmol/nmol C*hour)
@@ -28,13 +29,13 @@ individuals[1:num_individuals, 2] <- 0.00033  ## cell size
 individuals[1:num_individuals, 3] <- 1 ## alive
 individuals[1:num_individuals, 4] <- state$S ## S
 individuals[1:num_individuals, 5] <- 0.00000079 ## internal resource concentration (nmol/cell)
-individuals[1:individual_matrix_size, 6] <- 0.04166667 ## mumax (1/hour)
-individuals[1:individual_matrix_size, 7] <- 0.002333 ## qnaught (nmol/nmol C)
-individuals[1:individual_matrix_size, 8] <- sample(1:30, individual_matrix_size, replace = TRUE, 
+individuals[1:num_individuals, 6] <- 0.04166667 ## mumax (1/hour)
+individuals[1:num_individuals, 7] <- 0.002333 ## qnaught (nmol/nmol C)
+individuals[1:num_individuals, 8] <- sample(1:30, num_individuals, replace = TRUE, 
                                                    prob = c(1.5, 0.75, rep(1,28))) ## colony id
-individuals[1:individual_matrix_size, 9] <- 0 ## uptake (per individual, 0 to start)
-individuals[1:individual_matrix_size, 10] <- 0.097083333 ## Vmax (nmol/nmol C*hour) 
-individuals[1:individual_matrix_size, 11] <- 510 ## Km (nmol/L)
+individuals[1:num_individuals, 9] <- 0 ## uptake (per individual, 0 to start)
+individuals[1:num_individuals, 10] <- 0.097083333 ## Vmax (nmol/nmol C*hour) 
+individuals[1:num_individuals, 11] <- 510 ## Km (nmol/L)
   
 ## make another matrix for colony information
 ## convection and death on colony level, then remove those individuals from individuals matrix
@@ -68,31 +69,20 @@ Sr_time <- data.frame()
 ##########################################
 
 numColonies <- function(individuals){
-  num_colonies <- length(unique(individuals[, 8]))
-  iterator = 1
+  num_colonies <- length(unique(individuals[1:num_individuals, 8]))
   colony_id <- c()
   colony_population <- c()
-  colony_live <- c()
   colony_sr <- c()
   for (i in 1:num_colonies){
-    while ((iterator %in% individuals[, 8]) == FALSE){
-      iterator <- iterator + 1
-    }
-    if ((iterator %in% individuals[, 8]) == TRUE){
-      count = length(individuals[, 8][individuals[,8 ] == iterator])
-      colony_population <- append(colony_population, count)
-      colony_id <- append(colony_id, iterator)
-      colony_live <- append(colony_live, 1)
-      colony_sr <- append(colony_sr, 20)
-      iterator <- iterator + 1
-    }
-    else{
-      print("there is some other issue you need to figure out")
-    }
+    count = length(which(!is.na(individuals[,8]) & individuals[,8] == i))
+    colony_population <- append(colony_population, count)
+    colony_id <- append(colony_id, i)
+    colony_sr <- append(colony_sr, 20)
+    
   }
-  colony_numbers <- data.frame(colony_id, colony_population, colony_live, colony_sr)
+  colony_numbers <- data.frame(colony_id, colony_population, colony_sr)
   #rownames(colony_numbers) <- colony_names
-  colnames(colony_numbers) <- c("colony_superindividual_id", "colony_population", "alive", "Sr")
+  colnames(colony_numbers) <- c("colony_superindividual_id", "colony_population", "Sr")
   return(colony_numbers)
 }
 
@@ -106,7 +96,7 @@ for (i in 1:num_time_steps) {
   if (i == 1){
     colony <- numColonies(individuals)
     num_colonies <- nrow(colony)}
-  
+
   ### 1. DILTUION (of colonies & S) ########################
   for (i in 1:num_colonies){
     random <- runif(colony[i, 4], 0, 100)
@@ -149,8 +139,7 @@ for (i in 1:num_time_steps) {
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + uptake_S
     uptake_total = uptake_S ## change uptake total to keep track of actual total when desired total exceeds S
     state$S = 0 
-  }
-  else{
+  } else {
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + resource_uptake_per_agent
     state$S = state$S - uptake_total
   }
@@ -184,6 +173,20 @@ for (i in 1:num_time_steps) {
     }
   }
   ## sloughing ???????????
+  for (i in 1:num_colonies){
+    if (colony[i, 2] > max_colony_size){
+      random_sloughing <- runif(colony[i, 2], 0, 100)
+      random_index = 1
+      for (row in 1:num_individuals){
+        if ((individuals[row, 8] == i) && (random_sloughing[random_index] < 30)){
+          individuals[row, 8] = num_colonies + 1
+          random_index <- random_index + 1
+        } else {
+          random_index <- random_index + 1
+        }
+      }
+    }
+  }
   
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
   #individuals_after_division <- length(individuals[live_individuals])
