@@ -5,7 +5,7 @@
 ##########################################
 
 num_individuals <- 5000
-max_colony_size <- 50000
+max_colony_size <- 200
 #Sr = 6666 ## number of individuals a individuals represents
 num_time_steps <- 100
 vmax <- 0.097083333 #(nmol/nmol C*hour)
@@ -99,9 +99,9 @@ for (i in 1:num_time_steps) {
 
   ### 1. DILTUION (of colonies & S) ########################
   for (i in 1:num_colonies){
-    random <- runif(colony[i, 4], 0, 100)
+    random <- runif(colony[i, 3], 0, 100)
     num_to_remove <- length(which(random <= 100*(0.5/24)))
-    colony[i, 4] <- (colony[i, 4] - num_to_remove)
+    colony[i, 3] <- (colony[i, 3] - num_to_remove)
   }
   
   ## get TOTAL individuals (individuals per colony times Sr)
@@ -126,9 +126,9 @@ for (i in 1:num_time_steps) {
   ## aggregate uptake per individual to colony level, multiply Sr by uptake per colony to get uptake
   ## per superindividual
   uptake_per_colony <- aggregate(individuals[live_individuals, 7]~individuals[live_individuals, 8], individuals, sum)
-  colony <- cbind(colony, uptake_per_colony[, 2])
-  colnames(colony) <- c("colony_superindividual_id", "colony_population", "alive", "Sr", "uptake_per_superindividal")
-  colony$uptake_per_superindividal <- (colony$uptake_per_superindividal*colony$Sr)
+  colony$uptake_per_superindividual <- uptake_per_colony[, 2]
+  #colnames(colony) <- c("colony_superindividual_id", "colony_population", "Sr", "uptake_per_superindividal")
+  colony$uptake_per_superindividual <- (colony$uptake_per_superindividual*colony$Sr)
   
   ## sum uptake per individual for extracellular mass balance
   uptake_total <- sum(colony$uptake_per_superindividal)
@@ -172,17 +172,25 @@ for (i in 1:num_time_steps) {
       last_ID <- last_ID + 1
     }
   }
-  ## sloughing ???????????
+  ### 5. SLOUGHING ################################
   for (i in 1:num_colonies){
     if (colony[i, 2] > max_colony_size){
       random_sloughing <- runif(colony[i, 2], 0, 100)
       random_index = 1
-      for (row in 1:num_individuals){
-        if ((individuals[row, 8] == i) && (random_sloughing[random_index] < 30)){
-          individuals[row, 8] = num_colonies + 1
-          random_index <- random_index + 1
-        } else {
-          random_index <- random_index + 1
+      while (random_index <= length(random_sloughing)){
+        for (row in 1:num_individuals){
+          if ((individuals[row, 8] == i) && (random_sloughing[random_index] < 30)){
+            individuals[row, 8] = num_colonies + 1
+            random_index <- random_index + 1
+            if (random_index >= length(random_sloughing)){
+              break
+            }
+          } else {
+            random_index <- random_index + 1
+            if (random_index >= length(random_sloughing)){
+              break
+            }
+          }
         }
       }
     }
@@ -192,17 +200,17 @@ for (i in 1:num_time_steps) {
   #individuals_after_division <- length(individuals[live_individuals])
   ######################################################
   
-  ### 5. MERGING/SEPARATING ############################
+  ### 6. MERGING/SEPARATING ############################
   ######################################################
   
-  ### 6. UPDATE S W/ NEW RESOURCE ######################
+  ### 7. UPDATE S W/ NEW RESOURCE ######################
   state$S <- state$S + (state$flow_rate*state$nutrient_inflow) 
   
   ## update S in individuals matrix
   individuals[, 4] <- state$S
   ######################################################
   
-  ### 7. OUTPUT DATAFRAME FOR ALL TIMESTEPS ############
+  ### 8. OUTPUT DATAFRAME FOR ALL TIMESTEPS ############
   out_per_time <- data.frame("ID" = individuals[live_individuals, 1], 
                              "vmax" = vmax, 
                              "km" = km,
