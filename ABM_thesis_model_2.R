@@ -7,7 +7,7 @@
 num_individuals <- 200
 max_colony_size <- 100
 #Sr = 6666 ## number of individuals a individuals represents
-num_time_steps <- 10
+num_time_steps <- 50
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
@@ -132,13 +132,13 @@ for (step in 1:num_time_steps) {
   colony$uptake_per_superindividual <- (colony$uptake_per_superindividual*colony$Sr)
   
   ## sum uptake per individual for extracellular mass balance
-  uptake_total <- sum(colony$uptake_per_superindividal)
+  uptake_total <- sum(colony$uptake_per_superindividual)
   
   ## incorporate uptake into individuals
   if (state$S < uptake_total){
     uptake_S <- (state$S/(sum(colony$total_individuals_Sr)))
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + uptake_S
-    uptake_total = uptake_S ## change uptake total to keep track of actual total when desired total exceeds S
+    uptake_total = (uptake_S*(sum(colony$total_individuals_Sr))) ## change uptake total to keep track of actual total when desired total exceeds S
     state$S = 0 
   } else {
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + resource_uptake_per_individual
@@ -180,7 +180,7 @@ for (step in 1:num_time_steps) {
       random_index = 1
       while (random_index <= length(random_sloughing)){
         for (row in 1:num_individuals){
-          if ((individuals[row, 8] == i) && (random_sloughing[random_index] < 30)){
+          if ((individuals[row, 8] == i) && (random_sloughing[random_index] < -1)){
             individuals[row, 8] = num_colonies + 1
             random_index <- random_index + 1
             if (random_index >= length(random_sloughing)){
@@ -292,5 +292,9 @@ ggplot(uptake_time, aes(x = time, y = uptake_size)) + geom_point()
 ggplot(Sr_time, aes(x = individuals_after_death, y = individuals_after_division)) + geom_point()
 
 ggplot(foo_time, aes(x = S, y = foo)) + geom_point()
+
+plot(output_df$cell_size ~ output_df$time)
+plot(output_df$intracellular_resource ~ output_df$time)
+plot(output_df$S ~ output_df$time)
 
 plot(output_df$mu ~ output_df$q) #DOES NOT WORK??
