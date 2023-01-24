@@ -4,10 +4,10 @@
 ## Initial individuals and time step parameters
 ##########################################
 
-num_individuals <- 5000
-max_colony_size <- 200
+num_individuals <- 200
+max_colony_size <- 100
 #Sr = 6666 ## number of individuals a individuals represents
-num_time_steps <- 100
+num_time_steps <- 10
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
@@ -31,8 +31,8 @@ individuals[1:num_individuals, 4] <- state$S ## S
 individuals[1:num_individuals, 5] <- 0.00000079 ## internal resource concentration (nmol/cell)
 individuals[1:num_individuals, 6] <- 0.04166667 ## mumax (1/hour)
 individuals[1:num_individuals, 7] <- 0.002333 ## qnaught (nmol/nmol C)
-individuals[1:num_individuals, 8] <- sample(1:30, num_individuals, replace = TRUE, 
-                                                   prob = c(1.5, 0.75, rep(1,28))) ## colony id
+individuals[1:num_individuals, 8] <- sample(1:10, num_individuals, replace = TRUE, 
+                                                   prob = c(1.5, 0.75, rep(1,8))) ## colony id
 individuals[1:num_individuals, 9] <- 0 ## uptake (per individual, 0 to start)
 individuals[1:num_individuals, 10] <- 0.097083333 ## Vmax (nmol/nmol C*hour) 
 individuals[1:num_individuals, 11] <- 510 ## Km (nmol/L)
@@ -63,6 +63,7 @@ resource_time <- data.frame()
 intracellular_time <- data.frame()
 uptake_time <- data.frame()
 Sr_time <- data.frame()
+output_df <- data.frame()
 
 ##########################################
 ## functions created for model
@@ -91,9 +92,9 @@ numColonies <- function(individuals){
 ##########################################
 
 #profvis({
-for (i in 1:num_time_steps) {
+for (step in 1:num_time_steps) {
   ## switched this to if statement so Sr isn't reset every timestep
-  if (i == 1){
+  if (step == 1){
     colony <- numColonies(individuals)
     num_colonies <- nrow(colony)}
 
@@ -140,7 +141,7 @@ for (i in 1:num_time_steps) {
     uptake_total = uptake_S ## change uptake total to keep track of actual total when desired total exceeds S
     state$S = 0 
   } else {
-    individuals[live_individuals, 5] <- individuals[live_individuals, 5] + resource_uptake_per_agent
+    individuals[live_individuals, 5] <- individuals[live_individuals, 5] + resource_uptake_per_individual
     state$S = state$S - uptake_total
   }
   ######################################################
@@ -151,7 +152,7 @@ for (i in 1:num_time_steps) {
                                      (individuals[live_individuals, 5]/individuals[live_individuals, 2])))
   ## update individual cell size of all individuals
   individuals[live_individuals, 2] <- individuals[live_individuals, 2] + (mu*individuals[live_individuals, 2])
-  ## if size calculated by division is below minimum cell size (m0), replace with m0
+  ## if size calculated by division is below minimum cell size (m0), replace with m0)
   if (any(!is.na(individuals[, 2]) & individuals[, 2] < 0.00022)) { 
     warning("size too small")
   }
@@ -165,7 +166,7 @@ for (i in 1:num_time_steps) {
       
       individuals[j, 5] = individuals[j, 5]/2 # intracellular resource update
       new <- c(last_ID + 1, individuals[j, 2], 1, state$S, individuals[j, 5], individuals[j, 6],
-               individuals[j, 7], individuals[j, 8])
+               individuals[j, 7], individuals[j, 8], 0, individuals[j, 10], individuals[j, 11])
       num_individuals <- num_individuals + 1
       total_individuals <- (which(!is.na(individuals[,1])))
       individuals[length(total_individuals) + 1,] <- new
@@ -198,6 +199,17 @@ for (i in 1:num_time_steps) {
   
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
   #individuals_after_division <- length(individuals[live_individuals])
+  
+  ## update number of colonies
+  num_colonies <- nrow(colony)
+  
+  ## create vector of updated colony populations
+  new_colonies <- tabulate(individuals[live_individuals, 8])
+  
+  ## update colony populations
+  for (k in 1:num_colonies){
+    colony[k, 2] <- new_colonies[k]
+  }
   ######################################################
   
   ### 6. MERGING/SEPARATING ############################
@@ -211,42 +223,42 @@ for (i in 1:num_time_steps) {
   ######################################################
   
   ### 8. OUTPUT DATAFRAME FOR ALL TIMESTEPS ############
-  out_per_time <- data.frame("ID" = individuals[live_individuals, 1], 
-                             "vmax" = vmax, 
-                             "km" = km,
-                             "S" = state$S, 
+  out_per_time <- data.frame("ID" = individuals[live_individuals, 1],
+                             "time" = rep(step, nrow(individuals[live_individuals,])),
+                             "colony_ID" = individuals[live_individuals, 8],
+                             "S" = state$S,
+                             "intracellular_resource" = individuals[live_individuals, 5],
+                             "cell_size" = individuals[live_individuals, 2],
+                             "vmax" = individuals[live_individuals, 10], 
+                             "km" = individuals[live_individuals, 11],
                              "mumax" = individuals[live_individuals, 6],
                              "qnaught" = individuals[live_individuals, 7],
-                             "time" = rep(i, nrow(individuals[live_individuals,])), 
-                             "intracellular_resource" = individuals[live_individuals, 5],
-                             "mu" = mu,
-                             "cell_size" = individuals[live_individuals, 2],
-                             "alive" = individuals[live_individuals, 3])
+                             "mu" = mu)
 
   ## recreate individuals matrix for new timestep ### GET RID OF THIS????
-  intracellular_resource <- individuals[live_individuals, 5]
-  cell_size <- individuals[live_individuals, 2]
-  individuals <- matrix(NA, nrow = matrix_size, ncol = 7)
-  individuals[1:num_individuals, 1] <- 1:num_individuals  #ID
-  individuals[1:num_individuals, 2] <- cell_size[1]  ## cell size
-  individuals[1:num_individuals, 3] <- 1 ## alive
-  individuals[1:num_individuals, 4] <- state$S ## S
-  individuals[1:num_individuals, 5] <- intracellular_resource[1] ## intracellular resource (nmol/cell)
-  individuals[1:matrix_size, 6] <- 0.04166667 ## mumax (1/hour)
-  individuals[1:matrix_size, 7] <- 0.002333 ## qnaught (nmol/nmol C)
+  # intracellular_resource <- individuals[live_individuals, 5]
+  # cell_size <- individuals[live_individuals, 2]
+  # individuals <- matrix(NA, nrow = matrix_size, ncol = 7)
+  # individuals[1:num_individuals, 1] <- 1:num_individuals  #ID
+  # individuals[1:num_individuals, 2] <- cell_size[1]  ## cell size
+  # individuals[1:num_individuals, 3] <- 1 ## alive
+  # individuals[1:num_individuals, 4] <- state$S ## S
+  # individuals[1:num_individuals, 5] <- intracellular_resource[1] ## intracellular resource (nmol/cell)
+  # individuals[1:matrix_size, 6] <- 0.04166667 ## mumax (1/hour)
+  # individuals[1:matrix_size, 7] <- 0.002333 ## qnaught (nmol/nmol C)
   
   
   ## creating timestep data frames for diagnostics and plotting
   resource_per_time <- data.frame("time" = i, "concentration" = state$S)
-  intracellular_per_timestep <- data.frame("time" = i, "intracellular_after_uptake_before_division" = intracellular_after_uptake_before_division)
+
   uptake_per_timestep <- data.frame("time" = i, "uptake_size" = uptake_total)
   
   uptake_time <- rbind(uptake_time, uptake_per_timestep)
   resource_time <- rbind(resource_time, resource_per_time)
-  intracellular_time <- rbind(intracellular_time, intracellular_per_timestep)
   
   #row-append to output dataframe that stores outputs for all individuals and all time steps
   output[[i]] <- out_per_time
+  output_df <- rbind(output_df, out_per_time)
   ######################################################
 }
 #})
