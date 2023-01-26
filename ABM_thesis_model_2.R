@@ -4,10 +4,10 @@
 ## Initial individuals and time step parameters
 ##########################################
 
-num_individuals <- 200
+num_individuals <- 400
 max_colony_size <- 100
 #Sr = 6666 ## number of individuals a individuals represents
-num_time_steps <- 50
+num_time_steps <- 100
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
@@ -122,14 +122,14 @@ for (step in 1:num_time_steps) {
   
   ## multiply uptake per individual by each individual's cell size
   resource_uptake_per_individual <- uptake_per_individual*individuals[live_individuals, 2] ## keep this for incorporating S into individuals!!
-  individuals[live_individuals, 9] <- individuals[live_individuals, 9]*individuals[live_individuals, 2]
+  individuals[live_individuals, 9] <- resource_uptake_per_individual
   
   ## aggregate uptake per individual to colony level, multiply Sr by uptake per colony to get uptake
   ## per superindividual
-  uptake_per_colony <- aggregate(individuals[live_individuals, 7]~individuals[live_individuals, 8], individuals, sum)
-  colony$uptake_per_superindividual <- uptake_per_colony[, 2]
+  uptake_per_colony <- aggregate(individuals[live_individuals, 9]~individuals[live_individuals, 8], individuals, sum)
+  colony$uptake_per_colony <- uptake_per_colony[, 2]
   #colnames(colony) <- c("colony_superindividual_id", "colony_population", "Sr", "uptake_per_superindividal")
-  colony$uptake_per_superindividual <- (colony$uptake_per_superindividual*colony$Sr)
+  colony$uptake_per_superindividual <- (colony$uptake_per_colony*colony$Sr)
   
   ## sum uptake per individual for extracellular mass balance
   uptake_total <- sum(colony$uptake_per_superindividual)
@@ -138,7 +138,7 @@ for (step in 1:num_time_steps) {
   if (state$S < uptake_total){
     uptake_S <- (state$S/(sum(colony$total_individuals_Sr)))
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + uptake_S
-    uptake_total = (uptake_S*(sum(colony$total_individuals_Sr))) ## change uptake total to keep track of actual total when desired total exceeds S
+    #uptake_total = (uptake_S*(sum(colony$total_individuals_Sr))) ## change uptake total to keep track of actual total when desired total exceeds S
     state$S = 0 
   } else {
     individuals[live_individuals, 5] <- individuals[live_individuals, 5] + resource_uptake_per_individual
@@ -249,9 +249,9 @@ for (step in 1:num_time_steps) {
   
   
   ## creating timestep data frames for diagnostics and plotting
-  resource_per_time <- data.frame("time" = i, "concentration" = state$S)
+  resource_per_time <- data.frame("time" = step, "concentration" = state$S)
 
-  uptake_per_timestep <- data.frame("time" = i, "uptake_size" = uptake_total)
+  uptake_per_timestep <- data.frame("time" = step, "uptake_size" = uptake_total)
   
   uptake_time <- rbind(uptake_time, uptake_per_timestep)
   resource_time <- rbind(resource_time, resource_per_time)
@@ -266,6 +266,7 @@ for (step in 1:num_time_steps) {
 ##########################################
 ## Plotting
 ##########################################
+
 library(ggplot2)
 library(dplyr)
 
