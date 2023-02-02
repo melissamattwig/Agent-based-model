@@ -1,5 +1,10 @@
 
 
+library(GLDEX)
+library(ggplot2)
+library(dplyr)
+
+
 ##########################################
 ## Initial individuals and time step parameters
 ##########################################
@@ -7,17 +12,18 @@
 num_individuals <- 400
 max_colony_size <- 100
 #Sr = 6666 ## number of individuals a individuals represents
-num_time_steps <- 100
+num_time_steps <- 150
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
-individual_matrix_size <- 100000
+individual_matrix_size <- 1000000
+
 colony_matrix_size <- 1000
 
 ## Set up data frame for state variables
-state <- data.frame("S" = 500)
+state <- data.frame("S" = 10)
 state$flow_rate <- 0.02083333
-state$nutrient_inflow <- 500
+state$nutrient_inflow <- 10
 
 ##########################################
 ## Set up colony for individuals 
@@ -99,11 +105,26 @@ for (step in 1:num_time_steps) {
     num_colonies <- nrow(colony)}
 
   ### 1. DILTUION (of colonies & S) ########################
-  for (i in 1:num_colonies){
-    random <- runif(colony[i, 3], 0, 100)
+  for (dilute in 1:(nrow(colony))){
+    random <- runif(colony[dilute, 3], 0, 100)
     num_to_remove <- length(which(random <= 100*(0.5/24)))
-    colony[i, 3] <- (colony[i, 3] - num_to_remove)
+    colony[dilute, 3] <- (colony[dilute, 3] - num_to_remove)
   }
+  # for (remove in 1:nrow(colony)){
+  #   if (colony[remove, 3] == 0 & !is.na(colony[remove, 3])){
+  #     individuals <- individuals[individuals[,8] != colony[remove, 1], ]
+  #     #colony <- colony[colony[, 1] != colony[remove, 1], ]
+  #     #num_colonies <- nrow(colony)
+  #     #rownames(colony) <- 1:nrow(colony)
+  #   }
+  #   colony <- colony[colony[, 3] != 0, ]
+  #   num_colonies <- nrow(colony)
+  # }
+  
+  remove_list <- colony[colony[,3]==0,1]
+  individuals <- subset(individuals,!(individuals[, 8] %in% remove_list))
+  colony <- colony[colony[, 3] != 0, ]
+  num_colonies <- nrow(colony)
   
   ## get TOTAL individuals (individuals per colony times Sr)
   colony$total_individuals_Sr <- colony$colony_population*colony$Sr
@@ -160,6 +181,7 @@ for (step in 1:num_time_steps) {
   
   ### 4. DIVISION ######################################
   last_ID <- tail(live_individuals, n = 1)
+  total_individuals <- (which(!is.na(individuals[,1])))
   for (j in live_individuals){
     if (individuals[j, 2] > (2*m0)){
       individuals[j, 2] = individuals[j, 2]/2 # size update
@@ -168,11 +190,12 @@ for (step in 1:num_time_steps) {
       new <- c(last_ID + 1, individuals[j, 2], 1, state$S, individuals[j, 5], individuals[j, 6],
                individuals[j, 7], individuals[j, 8], 0, individuals[j, 10], individuals[j, 11])
       num_individuals <- num_individuals + 1
-      total_individuals <- (which(!is.na(individuals[,1])))
       individuals[length(total_individuals) + 1,] <- new
+      total_individuals <- append(total_individuals, length(total_individuals + 1))
       last_ID <- last_ID + 1
     }
   }
+  live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
   ### 5. SLOUGHING ################################
   for (i in 1:num_colonies){
     if (colony[i, 2] > max_colony_size){
@@ -205,6 +228,7 @@ for (step in 1:num_time_steps) {
   
   ## create vector of updated colony populations
   new_colonies <- tabulate(individuals[live_individuals, 8])
+  new_colonies <- fun.zero.omit(new_colonies)
   
   ## update colony populations
   for (k in 1:num_colonies){
@@ -266,9 +290,6 @@ for (step in 1:num_time_steps) {
 ##########################################
 ## Plotting
 ##########################################
-
-library(ggplot2)
-library(dplyr)
 
 output_df <- data.frame()
 
