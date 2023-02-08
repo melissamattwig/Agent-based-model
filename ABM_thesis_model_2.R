@@ -10,9 +10,9 @@ library(dplyr)
 ##########################################
 
 num_individuals <- 400
-max_colony_size <- 100
+max_colony_size <- 800
 #Sr = 6666 ## number of individuals a individuals represents
-num_time_steps <- 150
+num_time_steps <- 100
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
@@ -80,10 +80,10 @@ numColonies <- function(individuals){
   colony_id <- c()
   colony_population <- c()
   colony_sr <- c()
-  for (i in 1:num_colonies){
-    count = length(which(!is.na(individuals[,8]) & individuals[,8] == i))
+  for (number in 1:num_colonies){
+    count = length(which(!is.na(individuals[,8]) & individuals[,8] == number))
     colony_population <- append(colony_population, count)
-    colony_id <- append(colony_id, i)
+    colony_id <- append(colony_id, number)
     colony_sr <- append(colony_sr, 20)
     
   }
@@ -197,14 +197,31 @@ for (step in 1:num_time_steps) {
   }
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
   ### 5. SLOUGHING ################################
+  
+  
+  ## can do without all the for loops, use indexing. Make vector of location of random numbers within threshold,
+  ## then subset the individuals in the colony and slough those in the same position in colony as random number
+  ## within threshold
+  
   for (i in 1:num_colonies){
     if (colony[i, 2] > max_colony_size){
+      random_sloughing <- runif(colony[i, 2], 0, 100)
+      position_to_slough <- which(random_sloughing < 60)
+      colony_to_slough <- which(!is.na(individuals[,8]) & individuals[,8] == 1)
+      sloughed_individual_positions <- colony_to_slough[position_to_slough]
+      individuals <- individuals[sloughed_individual_positions, 8] == tail(colony[,1], n=1) + 1
+    }
+  }
+  
+  for (i in 1:num_colonies){
+    if (colony[i, 2] > max_colony_size){
+      message("sloughed colony: ", colony[i, 1]," time step: ", step)
       random_sloughing <- runif(colony[i, 2], 0, 100)
       random_index = 1
       while (random_index <= length(random_sloughing)){
         for (row in 1:num_individuals){
-          if ((individuals[row, 8] == i) && (random_sloughing[random_index] < -1)){
-            individuals[row, 8] = num_colonies + 1
+          if ((individuals[row, 8] == colony[i, 1]) && (random_sloughing[random_index] < 60)){
+            individuals[row, 8] = tail(colony[,1], n=1) + 1
             random_index <- random_index + 1
             if (random_index >= length(random_sloughing)){
               break
@@ -216,7 +233,12 @@ for (step in 1:num_time_steps) {
             }
           }
         }
+        message("sloughed colony id: ", colony[i,1], " sloughed colony pop after: ", length(which(!is.na(individuals[,8]) & individuals[,8] == colony[i,1])))
+        message("new colony id:", tail(colony[,1], n=1) + 1, " new colony pop: ", length(which(!is.na(individuals[,8]) & individuals[,8] == tail(colony[,1], n=1) + 1)))
       }
+      new_pop <- length(which(!is.na(individuals[,8]) & individuals[,8] == tail(colony[,1], n=1) + 1))
+      new_colony_row <- c(tail(colony[,1], n=1) + 1, new_pop, colony[i, 3], (new_pop*colony[i, 3]), 0, 0)
+      colony <- rbind(colony, new_colony_row)
     }
   }
   
