@@ -207,40 +207,45 @@ for (step in 1:num_time_steps) {
     if (colony[i, 2] > max_colony_size){
       random_sloughing <- runif(colony[i, 2], 0, 100)
       position_to_slough <- which(random_sloughing < 60)
-      colony_to_slough <- which(!is.na(individuals[,8]) & individuals[,8] == 1)
+      colony_to_slough <- which(!is.na(individuals[,8]) & individuals[,8] == i)
       sloughed_individual_positions <- colony_to_slough[position_to_slough]
-      individuals <- individuals[sloughed_individual_positions, 8] == tail(colony[,1], n=1) + 1
-    }
-  }
-  
-  for (i in 1:num_colonies){
-    if (colony[i, 2] > max_colony_size){
-      message("sloughed colony: ", colony[i, 1]," time step: ", step)
-      random_sloughing <- runif(colony[i, 2], 0, 100)
-      random_index = 1
-      while (random_index <= length(random_sloughing)){
-        for (row in 1:num_individuals){
-          if ((individuals[row, 8] == colony[i, 1]) && (random_sloughing[random_index] < 60)){
-            individuals[row, 8] = tail(colony[,1], n=1) + 1
-            random_index <- random_index + 1
-            if (random_index >= length(random_sloughing)){
-              break
-            }
-          } else {
-            random_index <- random_index + 1
-            if (random_index >= length(random_sloughing)){
-              break
-            }
-          }
-        }
-        message("sloughed colony id: ", colony[i,1], " sloughed colony pop after: ", length(which(!is.na(individuals[,8]) & individuals[,8] == colony[i,1])))
-        message("new colony id:", tail(colony[,1], n=1) + 1, " new colony pop: ", length(which(!is.na(individuals[,8]) & individuals[,8] == tail(colony[,1], n=1) + 1)))
-      }
-      new_pop <- length(which(!is.na(individuals[,8]) & individuals[,8] == tail(colony[,1], n=1) + 1))
-      new_colony_row <- c(tail(colony[,1], n=1) + 1, new_pop, colony[i, 3], (new_pop*colony[i, 3]), 0, 0)
+      new_colony_id <- tail(colony[,1], n=1) + 1
+      individuals[sloughed_individual_positions, 8] = new_colony_id
+      new_pop <- length(which(!is.na(individuals[,8]) & individuals[,8] == new_colony_id))
+      colony[1, 2] <- colony[1, 2] - new_pop
+      new_colony_row <- c(new_colony_id, new_pop, colony[i, 3], (new_pop*colony[i, 3]), 0, 0)
       colony <- rbind(colony, new_colony_row)
     }
   }
+  
+  # for (i in 1:num_colonies){
+  #   if (colony[i, 2] > max_colony_size){
+  #     message("sloughed colony: ", colony[i, 1]," time step: ", step)
+  #     random_sloughing <- runif(colony[i, 2], 0, 100)
+  #     random_index = 1
+  #     while (random_index <= length(random_sloughing)){
+  #       for (row in 1:num_individuals){
+  #         if ((individuals[row, 8] == colony[i, 1]) && (random_sloughing[random_index] < 60)){
+  #           individuals[row, 8] = tail(colony[,1], n=1) + 1
+  #           random_index <- random_index + 1
+  #           if (random_index >= length(random_sloughing)){
+  #             break
+  #           }
+  #         } else {
+  #           random_index <- random_index + 1
+  #           if (random_index >= length(random_sloughing)){
+  #             break
+  #           }
+  #         }
+  #       }
+  #       message("sloughed colony id: ", colony[i,1], " sloughed colony pop after: ", length(which(!is.na(individuals[,8]) & individuals[,8] == colony[i,1])))
+  #       message("new colony id:", tail(colony[,1], n=1) + 1, " new colony pop: ", length(which(!is.na(individuals[,8]) & individuals[,8] == tail(colony[,1], n=1) + 1)))
+  #     }
+  #     new_pop <- length(which(!is.na(individuals[,8]) & individuals[,8] == tail(colony[,1], n=1) + 1))
+  #     new_colony_row <- c(tail(colony[,1], n=1) + 1, new_pop, colony[i, 3], (new_pop*colony[i, 3]), 0, 0)
+  #     colony <- rbind(colony, new_colony_row)
+  #   }
+  # }
   
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
   #individuals_after_division <- length(individuals[live_individuals])
