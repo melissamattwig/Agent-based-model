@@ -9,10 +9,10 @@ library(dplyr)
 ## Initial individuals and time step parameters
 ##########################################
 
-num_individuals <- 400
-max_colony_size <- 800
+num_individuals <- 2000
+max_colony_size <- 8000
 #Sr = 6666 ## number of individuals a individuals represents
-num_time_steps <- 100
+num_time_steps <- 300
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
@@ -198,26 +198,36 @@ for (step in 1:num_time_steps) {
   live_individuals <- which(!is.na(individuals[,3]) & individuals[,3] == 1)
   ### 5. SLOUGHING ################################
   
-  
-  ## can do without all the for loops, use indexing. Make vector of location of random numbers within threshold,
-  ## then subset the individuals in the colony and slough those in the same position in colony as random number
-  ## within threshold
-  
   for (i in 1:num_colonies){
     if (colony[i, 2] > max_colony_size){
+      row.names(colony) <- seq(1, nrow(colony), 1)
       random_sloughing <- runif(colony[i, 2], 0, 100)
       position_to_slough <- which(random_sloughing < 60)
-      colony_to_slough <- which(!is.na(individuals[,8]) & individuals[,8] == i)
+      colony_to_slough <- which(!is.na(individuals[,8]) & individuals[,8] == colony[i, 1])
       sloughed_individual_positions <- colony_to_slough[position_to_slough]
-      new_colony_id <- tail(colony[,1], n=1) + 1
+      message("colony sloughed: ", colony[i, 1]," number of sloughed individuals: ", length(sloughed_individual_positions))
+      new_colony_id <- max(colony[, 1]) + 1
       individuals[sloughed_individual_positions, 8] = new_colony_id
+      if (is.na(sloughed_individual_positions[1])){
+        ugh <- sloughed_individual_positions
+        print(head(random_sloughing))
+        print(head(position_to_slough))
+        print(head(colony_to_slough))
+        break
+      }
+      print(head(sloughed_individual_positions))
       new_pop <- length(which(!is.na(individuals[,8]) & individuals[,8] == new_colony_id))
-      colony[1, 2] <- colony[1, 2] - new_pop
+      print(new_pop)
+      colony[i, 2] <- colony[i, 2] - new_pop
       new_colony_row <- c(new_colony_id, new_pop, colony[i, 3], (new_pop*colony[i, 3]), 0, 0)
+      message("sloughed colony: ", colony[i, 1], " new colony: ", new_colony_id, " time: ", step)
+      message(new_colony_row[1], " ", new_colony_row[2], " ", new_colony_row[3], " ", new_colony_row[4])
+      print(new_colony_row)
       colony <- rbind(colony, new_colony_row)
+      print(tail(colony, n =1))
     }
   }
-  
+  # old slough code
   # for (i in 1:num_colonies){
   #   if (colony[i, 2] > max_colony_size){
   #     message("sloughed colony: ", colony[i, 1]," time step: ", step)
@@ -257,10 +267,19 @@ for (step in 1:num_time_steps) {
   new_colonies <- tabulate(individuals[live_individuals, 8])
   new_colonies <- fun.zero.omit(new_colonies)
   
+  #print(tail(colony,n=1))
+  
   ## update colony populations
   for (k in 1:num_colonies){
-    colony[k, 2] <- new_colonies[k]
+    colony[k, 2] <- new_colonies[k,]
   }
+  
+  ## another way to subset
+  ##colony[colony$… == …]
+  ##colony$colony_pop[colony$id==12]<- ...
+  
+  #print(tail(colony,n=1))
+  
   ######################################################
   
   ### 6. MERGING/SEPARATING ############################
