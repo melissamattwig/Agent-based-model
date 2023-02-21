@@ -9,14 +9,14 @@ library(dplyr)
 ## Initial individuals and time step parameters
 ##########################################
 
-num_individuals <- 2000
-max_colony_size <- 8000
+num_individuals <- 5000
+max_colony_size <- 15000
 #Sr = 6666 ## number of individuals a individuals represents
 num_time_steps <- 300
 vmax <- 0.097083333 #(nmol/nmol C*hour)
 km <- 510 #(nmol/L)
 m0 <- 0.00022 #(nmole C/cell)
-individual_matrix_size <- 1000000
+individual_matrix_size <- 5000000
 
 colony_matrix_size <- 1000
 
@@ -84,7 +84,7 @@ numColonies <- function(individuals){
     count = length(which(!is.na(individuals[,8]) & individuals[,8] == number))
     colony_population <- append(colony_population, count)
     colony_id <- append(colony_id, number)
-    colony_sr <- append(colony_sr, 20)
+    colony_sr <- append(colony_sr, 30)
     
   }
   colony_numbers <- data.frame(colony_id, colony_population, colony_sr)
